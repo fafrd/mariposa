@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"mariposa/db"
 	"mariposa/models"
+	"os"
 
 	"bytes"
 	"fmt"
@@ -15,13 +17,19 @@ import (
 )
 
 func main() {
+	webhookURL := os.Getenv("WEBHOOK_URL")
+	if webhookURL == "" {
+		fmt.Println("WEBHOOK_URL is not set")
+		return
+	}
+
 	dbconn, err := db.Init()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer dbconn.Close()
-	
+
 	// Define the URL of the webpage to scrape
 	url := "https://www.mariposacounty.org/690/Daily-Log"
 
@@ -52,7 +60,7 @@ func main() {
 	// find the date
 	versionHeadLine := findNodeById(doc, "versionHeadLine")
 	re := regexp.MustCompile(`\d{2}-\d{2}-\d{4}`)
-    date := re.FindString(htmlRender(versionHeadLine))
+	date := re.FindString(htmlRender(versionHeadLine))
 
 	// is the date already in the db?
 	exists, err := db.DateExists(dbconn, date)
@@ -136,7 +144,9 @@ func main() {
 		}
 	}
 
-	// for each record, call db.InsertRecord
+	fmt.Printf("Found %d log entries\n", len(records))
+
+	// for each record, call db.InsertRecord and send to webhook
 	for _, record := range records {
 		err = db.InsertRecord(dbconn, record)
 		if err != nil {
@@ -145,8 +155,28 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Processed %d records\n", len(records))
+	if len(records) > 0 {
+		var builder strings.Builder
 
+		builder.WriteString("```")
+		builder.WriteString(fmt.Sprintf("Police log for %s\n", strings.SplitN(records[0].TimeTaken, " ", 2)[0]))
+		builder.WriteString("\n")
+		for _, record := range records {
+			builder.WriteString(record.NatureOfCall)
+			builder.WriteString("\n")
+		}
+		builder.WriteString("```")
+
+		// Get the final string
+		finalStr := builder.String()
+
+		// Send the final string to the webhook
+		err = sendToWebhook(webhookURL, finalStr)
+		if err != nil {
+			fmt.Println("Error sending to webhook:", err)
+			return
+		}
+	}
 }
 
 // Helper function to find a node with a given ID attribute
@@ -173,4 +203,34 @@ func htmlRender(n *html.Node) string {
 	w := io.Writer(&buf)
 	html.Render(w, n)
 	return buf.String()
+}
+
+type WebhookData struct {
+	Username string `json:"username"`
+	Content  string `json:"content"`
+}
+
+func sendToWebhook(url string, content string) error {
+	webhookData := WebhookData{
+		Username: "mariposa",
+		Content:  content,
+	}
+
+	jsonData, err := json.Marshal(webhookData)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("received non-OK response code: %d, body: %s", resp.StatusCode, body)
+	}
+
+	return nil
 }

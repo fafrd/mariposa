@@ -2,6 +2,10 @@
 
 Parser for https://www.mariposacounty.org/690/Daily-Log
 
+    export WEBHOOK_URL=...
+    go build
+    ./mariposa
+
 ```go
 [
     {00:04:25 RUNAWAY JUVENILE COMPLETED E WHITLOCK RD MARIPOSA}
