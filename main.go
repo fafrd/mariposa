@@ -98,7 +98,7 @@ func main() {
 			record := models.Record{}
 
 			current := c.FirstChild
-			record.TimeTaken = strings.TrimSpace(current.FirstChild.Data)
+			record.TimeTaken = strings.TrimSpace(current.FirstChild.FirstChild.Data)
 			// first record is the header, skip it
 			if strings.EqualFold(record.TimeTaken, "TIME TAKEN") {
 				continue
@@ -109,14 +109,14 @@ func main() {
 			if current.FirstChild.Data == "br" {
 				record.NatureOfCall = ""
 			} else {
-				record.NatureOfCall = current.FirstChild.Data
+				record.NatureOfCall = current.FirstChild.FirstChild.Data
 			}
 
 			current = current.NextSibling
 			if current.FirstChild.Data == "br" {
 				record.Disposition = ""
 			} else {
-				record.Disposition = current.FirstChild.Data
+				record.Disposition = current.FirstChild.FirstChild.Data
 			}
 
 			// next col is location 1, following col is location 2, after that is city
@@ -126,10 +126,10 @@ func main() {
 				record.Location = ""
 				current = current.NextSibling // advance ptr
 			} else {
-				record.Location = current.FirstChild.Data
+				record.Location = current.FirstChild.FirstChild.Data
 				current = current.NextSibling // advance ptr
 				if current.FirstChild.Data != "br" {
-					record.Location += " " + current.FirstChild.Data
+					record.Location += " " + current.FirstChild.FirstChild.Data
 				}
 			}
 
@@ -137,7 +137,7 @@ func main() {
 			if current.FirstChild.Data == "br" {
 				record.City = ""
 			} else {
-				record.City = current.FirstChild.Data
+				record.City = current.FirstChild.FirstChild.Data
 			}
 
 			records = append(records, record)
@@ -155,6 +155,7 @@ func main() {
 		}
 	}
 
+	// emit payload to webhook
 	if len(records) > 0 {
 		var builder strings.Builder
 
