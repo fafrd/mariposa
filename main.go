@@ -72,13 +72,7 @@ func main() {
 		fmt.Printf("Already processed %s\n", date)
 		return
 	} else {
-		// insert a record into days_processed table to prevent duplicate processing
 		fmt.Printf("Processing %s\n", date)
-		err := db.InsertDate(dbconn, date)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
 	}
 
 	// Find the element with ID "isPasted"
@@ -98,7 +92,7 @@ func main() {
 			record := models.Record{}
 
 			current := c.FirstChild
-			record.TimeTaken = strings.TrimSpace(current.FirstChild.FirstChild.Data)
+			record.TimeTaken = strings.TrimSpace(getData(current))
 			// first record is the header, skip it
 			if strings.EqualFold(record.TimeTaken, "TIME TAKEN") {
 				continue
@@ -106,38 +100,38 @@ func main() {
 			record.TimeTaken = date + " " + record.TimeTaken
 
 			current = current.NextSibling
-			if current.FirstChild.Data == "br" {
+			if getData(current) == "br" {
 				record.NatureOfCall = ""
 			} else {
-				record.NatureOfCall = current.FirstChild.FirstChild.Data
+				record.NatureOfCall = getData(current)
 			}
 
 			current = current.NextSibling
-			if current.FirstChild.Data == "br" {
+			if getData(current) == "br" {
 				record.Disposition = ""
 			} else {
-				record.Disposition = current.FirstChild.FirstChild.Data
+				record.Disposition = getData(current)
 			}
 
 			// next col is location 1, following col is location 2, after that is city
 			// concat location 1 + location 2 if nonempty
 			current = current.NextSibling
-			if current.FirstChild.Data == "br" {
+			if getData(current) == "br" {
 				record.Location = ""
 				current = current.NextSibling // advance ptr
 			} else {
-				record.Location = current.FirstChild.FirstChild.Data
+				record.Location = getData(current)
 				current = current.NextSibling // advance ptr
-				if current.FirstChild.Data != "br" {
-					record.Location += " " + current.FirstChild.FirstChild.Data
+				if getData(current) != "br" {
+					record.Location += " " + getData(current)
 				}
 			}
 
 			current = current.NextSibling
-			if current.FirstChild.Data == "br" {
+			if getData(current) == "br" {
 				record.City = ""
 			} else {
-				record.City = current.FirstChild.FirstChild.Data
+				record.City = getData(current)
 			}
 
 			records = append(records, record)
@@ -175,6 +169,17 @@ func main() {
 		err = sendToWebhook(webhookURL, finalStr)
 		if err != nil {
 			fmt.Println("Error sending to webhook:", err)
+			return
+		}
+	}
+
+	if !exists {
+		// insert a record into days_processed table to prevent duplicate processing
+		fmt.Printf("Processed %s\n", date)
+		err := db.InsertDate(dbconn, date)
+		err = nil
+		if err != nil {
+			fmt.Println(err)
 			return
 		}
 	}
@@ -234,4 +239,11 @@ func sendToWebhook(url string, content string) error {
 	}
 
 	return nil
+}
+
+func getData(node *html.Node) string {
+	if node.FirstChild.Data == "div" {
+		return node.FirstChild.FirstChild.Data
+	}
+	return node.FirstChild.Data
 }
