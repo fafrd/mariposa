@@ -92,48 +92,32 @@ func main() {
 			record := models.Record{}
 
 			current := c.FirstChild
-			record.TimeTaken = strings.TrimSpace(getData(current))
-			// first record is the header, skip it
-			if strings.EqualFold(record.TimeTaken, "TIME TAKEN") {
+			callForService := strings.TrimSpace(current.FirstChild.Data)
+			// Skip rows without a valid "CALL FOR SERVICE"
+			if callForService == "" {
 				continue
 			}
-			record.TimeTaken = date + " " + record.TimeTaken
 
-			current = current.NextSibling
-			if getData(current) == "br" {
-				record.NatureOfCall = ""
-			} else {
-				record.NatureOfCall = getData(current)
+			// Split the "CALL FOR SERVICE" by "-" and take the second part
+			parts := strings.Split(callForService, "-")
+			if len(parts) < 2 {
+				fmt.Println("Skipping invalid CALL FOR SERVICE:", callForService)
+				continue
 			}
+			record.NatureOfCall = strings.TrimSpace(parts[1])
 
-			current = current.NextSibling
-			if getData(current) == "br" {
-				record.Disposition = ""
-			} else {
-				record.Disposition = getData(current)
-			}
+			// TimeTaken will be just the date with 00:00 appended
+			record.TimeTaken = date + " 00:00"
 
-			// next col is location 1, following col is location 2, after that is city
-			// concat location 1 + location 2 if nonempty
+			// Skip the disposition, only take the "City" which is now the second column
 			current = current.NextSibling
-			if getData(current) == "br" {
-				record.Location = ""
-				current = current.NextSibling // advance ptr
-			} else {
-				record.Location = getData(current)
-				current = current.NextSibling // advance ptr
-				if getData(current) != "br" {
-					record.Location += " " + getData(current)
-				}
-			}
-
-			current = current.NextSibling
-			if getData(current) == "br" {
+			if current.FirstChild.Data == "br" {
 				record.City = ""
 			} else {
-				record.City = getData(current)
+				record.City = current.FirstChild.Data
 			}
 
+			// Add the record to the list
 			records = append(records, record)
 		}
 	}
@@ -177,7 +161,6 @@ func main() {
 		// insert a record into days_processed table to prevent duplicate processing
 		fmt.Printf("Processed %s\n", date)
 		err := db.InsertDate(dbconn, date)
-		err = nil
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -239,11 +222,4 @@ func sendToWebhook(url string, content string) error {
 	}
 
 	return nil
-}
-
-func getData(node *html.Node) string {
-	if node.FirstChild.Data == "div" {
-		return node.FirstChild.FirstChild.Data
-	}
-	return node.FirstChild.Data
 }
