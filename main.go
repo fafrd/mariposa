@@ -30,19 +30,33 @@ func main() {
 	}
 	defer dbconn.Close()
 
-	// Define the URL of the webpage to scrape
-	url := "https://www.mariposacounty.org/690/Daily-Log"
-
-	// Send an HTTP GET request to the URL
-	response, err := http.Get(url)
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", "https://www.mariposacounty.org/690/Daily-Log", nil)
 	if err != nil {
-		fmt.Println("Error fetching URL:", err)
-		return
+		fmt.Println("Request creation error:", err)
+		os.Exit(1)
 	}
-	defer response.Body.Close()
+
+	// Set User-Agent
+    //req.Header.Set("User-Agent", "curl/7.88.1")
+	req.Header.Set("User-Agent", "fafrd/mariposabot")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Request error:", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	// Exit early if 404 is returned
+	if resp.StatusCode == http.StatusNotFound {
+		fmt.Println("404 Not Found")
+		os.Exit(1)
+	}
+
 
 	// Read the response body into a byte slice
-	body, err := io.ReadAll(response.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Error reading response body:", err)
 		return
@@ -188,6 +202,9 @@ func findNodeById(n *html.Node, id string) *html.Node {
 }
 
 func htmlRender(n *html.Node) string {
+	if n == nil {
+		return ""
+	}
 	var buf bytes.Buffer
 	w := io.Writer(&buf)
 	html.Render(w, n)
